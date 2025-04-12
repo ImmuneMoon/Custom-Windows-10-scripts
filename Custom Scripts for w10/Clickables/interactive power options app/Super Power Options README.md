@@ -20,7 +20,8 @@ Super Power Options is a Python-based application that provides a user-friendly 
 1. Run the script or the bundled executable.  
 2. Enter the timer duration and select the time unit.  
 3. Choose a power action (Sleep, Restart, Shutdown).  
-4. Monitor the progress bar.  
+4. Monitor the progress.  
 5. Cancel the timer if needed.
+6. As of the current ver, closing the program ends the countdown
 
-This application simplifies the process of scheduling power actions, offering a more convenient and visual alternative to using command-line tools.
+This application simplifies the process of scheduling power actions, offering a more convenient and visual alternative to using command-line tools

@@ -41,34 +41,54 @@ def calculate_seconds(value, unit):
         return value * 31536000000
     return value
 
-# Global variables for timer and progress bar
+# Global variables for timer and -- if added -- progress bar
+# progress_bar = None  # Initialize progress_bar
+
+root = tk.Tk()
 remaining_time = 0
+total_seconds = 0
 timer_running = False
-progress_bar = None  # Initialize progress_bar
 progress_text = None
 initial_time = 0
+power_option = "NONE"
+task = "NONE" # To store the previous timer type
+cancel_task = False
+timer_value = 0
 
-def start_power_action(power_option):
-    global remaining_time, timer_running, initial_time
+# -- Status label for feedback
+status_label = Label(root, text="", fg="red")
+status_label.pack(pady=10)
+
+# Function to handle the execution of each button press
+def start_power_action(power_option, cancel_task):
+    global remaining_time, timer_running, initial_time, task, status_label, total_seconds
     try:
-        timer_value = timer_entry.get()
-        timer_unit = unit_combobox.get()
-        total_seconds = calculate_seconds(timer_value, timer_unit)
-        if total_seconds > 0:
-            remaining_time = total_seconds
-            initial_time = total_seconds
-            timer_running = True
-            update_progress_timer()  # Start updating the progress timer
+        
+        if cancel_task:
+            root.after(1000, cancel_timer) # Execute after delay
+        if task == "NONE":
+            timer_value = int(timer_entry.get())
+            if timer_value > 0:
+                timer_unit = unit_combobox.get()
+                total_seconds = calculate_seconds(timer_value, timer_unit)
+                
+            if total_seconds > 0:
+                remaining_time = total_seconds
+                initial_time = total_seconds
+                timer_running = True
+                update_progress_timer()  # Start updating the progress timer
 
-            if power_option == "sleep":
-                root.after(total_seconds * 1000, set_sleep_timer_execute) # Execute after delay
-            elif power_option == "restart":
-                root.after(total_seconds * 1000, set_restart_timer_execute) # Execute after delay
-            elif power_option == "shutdown":
-                root.after(total_seconds * 1000, set_shutdown_timer_execute) # Execute after delay
-            status_label.config(text=f"{power_option.capitalize()} timer started for {total_seconds} seconds.")
-        else:
-            status_label.config(text="Please enter a positive timer value.")
+                if power_option == "SLEEP":
+                    root.after(total_seconds * 1000, set_sleep_timer_execute) # Execute after delay
+                elif power_option == "RESTART":
+                    root.after(total_seconds * 1000, set_restart_timer_execute) # Execute after delay
+                elif power_option == "SHUTDOWN":
+                    root.after(total_seconds * 1000, set_shutdown_timer_execute) # Execute after delay
+
+                task = power_option
+                status_label.config(text=f"{power_option} timer started for {total_seconds} seconds.")
+            else:
+                status_label.config(text="Please enter a positive timer value.")
     except ValueError:
         status_label.config(text="Please enter a valid number!")
 
@@ -84,12 +104,20 @@ def update_progress_timer():
             status_label.config(text="Timer finished!")
 
 def cancel_timer():
-    global timer_running, scheduled_action, status_label #, progress_bar
-    if timer_running and scheduled_action:
-        root.after_cancel(scheduled_action)
-        timer_running = False
-        scheduled_action = None
-        status_label.config(text="Timer cancelled.")
+    global timer_value, unit_combobox, timer_running, power_option, task, cancel_task, status_label, initial_time, remaining_time, total_seconds #, progress_bar
+    timer_running = False
+    progress_text.config(text="No Timer Set")
+    task = "NONE"
+    power_option = "NONE"
+    initial_time = 0
+    remaining_time = 0
+    timer_entry.delete(0, tk.END)
+    timer_entry.insert(0, 0)
+    timer_value = 0
+    status_label.config(text="Timer cancelled.")
+    cancel_task = False
+    return cancel_task
+
 
 # -- Function to execute a batch file for the sleep timer (now called after delay)
 def set_sleep_timer_execute():
@@ -151,7 +179,6 @@ class _ToolTips:
             self.tooltip_window = None
 
 # -- Set up the GUI
-root = tk.Tk()
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 target_size = int(min(screen_width, screen_height) * 0.42)
@@ -177,6 +204,7 @@ cancel_timer_img = PhotoImage(file=cancel_button_path)
 # -- Instructions and timer input field
 Label(root, text="Timer Length:").pack(padx=10, pady=5)
 timer_entry = Entry(root, width=10)
+timer_entry.insert(0, 0)
 timer_entry.pack(pady=5)
 
 # -- Unit selection dropdown
@@ -191,42 +219,38 @@ button_frame = ttk.Frame(root)
 button_frame.pack(expand=True)
 
 # Sleep Button
-sleep_button = Button(button_frame, image=sleep_timer_img, command=lambda: start_power_action("sleep"))
+sleep_button = Button(button_frame, image=sleep_timer_img, command=lambda: start_power_action("SLEEP", cancel_task))
 sleep_button.image = sleep_timer_img  # Keep a reference!
 sleep_button.pack(side="left", padx=20, pady=20)
 sleep_tooltip = "Set Sleep Timer"
 _ToolTips(sleep_button, sleep_tooltip, root)
 
 # Shutdown Button
-shutdown_button = Button(button_frame, image=shutdown_timer_img, command=lambda: start_power_action("shutdown"))
+shutdown_button = Button(button_frame, image=shutdown_timer_img, command=lambda: start_power_action("SHUTDOWN", cancel_task))
 shutdown_button.image = shutdown_timer_img  # Keep a reference!
 shutdown_button.pack(side="left", padx=20, pady=20)
 shutdown_tooltip = "Set Shutdown Timer"
 _ToolTips(shutdown_button, shutdown_tooltip, root)
 
 # Restart Button
-restart_button = Button(button_frame, image=restart_timer_img, command=lambda: start_power_action("restart"))
+restart_button = Button(button_frame, image=restart_timer_img, command=lambda: start_power_action("RESTART", cancel_task))
 restart_button.image = restart_timer_img  # Keep a reference!
 restart_button.pack(side="left", padx=20, pady=20)
 restart_tooltip = "Set Restart Timer"
 _ToolTips(restart_button, restart_tooltip, root)
 
 # Cancel Button
-cancel_button = Button(root, image=cancel_timer_img, command=cancel_timer)
+cancel_button = Button(root, image=cancel_timer_img, command=lambda: start_power_action(power_option, True))
 cancel_button.image = restart_timer_img  # Keep a reference!
 cancel_button.pack(side="top", padx=20, pady=20)
 cancel_tooltip = "Cancel Timer"
 _ToolTips(cancel_button, cancel_tooltip, root)
 
-# -- Status label for feedback
-status_label = Label(root, text="", fg="red")
-status_label.pack(pady=10)
-
 # -- Timer Progress Canvas
 progress_canvas = Canvas(root, height=30)
 progress_canvas.pack(fill="x", side="bottom", padx=5, pady=5)
 
-progress_text = Label(progress_canvas, text="Time Left: 0 seconds")
+progress_text = Label(progress_canvas, text="No Timer Set")
 progress_text.place(relx=0.5, rely=0.5, anchor="center")
 
 # -- Get the absolute path for icon.png
