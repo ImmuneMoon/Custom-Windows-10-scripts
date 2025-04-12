@@ -29,7 +29,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Power_Options',
+    name='Super_Power_Options',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
