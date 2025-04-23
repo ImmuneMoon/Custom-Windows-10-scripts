@@ -1,0 +1,310 @@
+Quick Command Crosswalk
+You Want To...				In PowerShell				In Bash (Git Bash / WSL)
+
+Remove folder recursively		Remove-Item -Recurse -Force		rm -rf
+
+List directory				Get-ChildItem				ls
+
+Install venv				py -m pip install --user virtualenv	sudo apt-get install python3.6-venv
+
+Create venv				py -m venv env				python -m virtualenv env 
+
+Activate venv				.\venv\Scripts\activate			venv/Scripts/activate
+
+###In venv:
+Create Requirements.txt			pip list --format=freeze > requirements.txt
+
+
+#Create a clickable executable for a Python script:
+
+##- PyInstaller. It will package your script and its dependencies into a standalone .exe file that can be run on 
+Windows without requiring Python to be installed. 
+
+##Step-by-step guide:
+
+##1. Install PyInstaller:
+	First, you'll need to install PyInstaller using pip. Open a terminal or command prompt and run:
+
+		pip install pyinstaller
+
+##2. Prepare Your Script:
+	Make sure your Python script (e.g., my_program.py) is in a folder with all the necessary files (such as icons or any external resources).
+
+##3. Create the Executable:
+	Run the following command in the terminal or command prompt from the directory containing your script:
+
+		pyinstaller --onefile --windowed my_program.py
+
+
+		>Explanation of the options:<
+			* --onefile: 
+				Packages everything into a single .exe file.
+			* --windowed: 
+				Ensures no terminal window appears when the program is run (useful for GUI apps).
+
+
+4. Locate the Executable:
+	After running PyInstaller, you'll find a dist folder in the same directory as your script. Inside this folder, 
+	you'll find the newly created .exe file (e.g., my_program.exe).
+
+5. Optional Customization
+	* Add an Icon: 
+		You can include a custom icon for your executable by adding the --icon flag:
+
+			pyinstaller --onefile --windowed --icon=icon.ico my_program.py
+
+
+			>Replace icon.ico with the path to your .ico file.<
+	
+	*Create using SPEC file:
+		pyinstaller my_program.spec
+
+- Test the Application: Move your .exe file to another computer or directory to confirm it runs independently.
+
+
+### 🐳 **Docker container:**
+
+# Use an official 🐍Python runtime as a parent image
+FROM python:[VERSION] <-- figure out what version of pyton you need to use for your project. If unsure, just use the latest stable release, then type the number of that release here.
+
+You can check your ver # by going into a bash terminal and typing:
+python --version 
+or
+python -V
+
+# Set the working directory in the container, cd to app if needed
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Install any needed packages specified in requirements.txt, if needed, generate one after launching your venv:
+	pip freeze > requirements.txt
+	grep -v pywin32 requirements.txt > requirements-docker.txt
+
+	pip install --no-cache-dir -r requirements.txt
+
+# Command to run your program
+CMD ["python", "main.py"]
+
+
+
+
+🚀🚀🚀 **DOCKER TIME! "-AHEM- HELLO TECH CORP, CAN I HAS MONEY NOW?" YOU'RE FINALLY A PROFESSIONAL OR SOMETHING, LETS_GOOOOOOOOO!!!* 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀
+
+---
+
+### 🐳 **How to Run Dockerized containers**
+
+#### 🧱 Step 1: Build the Docker image
+```bash
+docker build -t super-power-options .
+```
+
+#### 🖥️ Step 2: Run it with GUI support (X11)
+```bash
+xhost +local:docker
+docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix --rm super-power-options
+```
+
+> ⚠️ Linux only for now—Docker Desktop + XQuartz for macOS is possible but trickier.
+
+---
+
+### 🧰 What's Inside
+
+Docker builds are **portable**, **isolated**, and **ready to deploy anywhere** the next project is needed.
+**Docker containers can’t access the GUI on Windows natively.**  
+If you’re using Docker Desktop on Windows, it doesn’t support X11 GUI apps *out of the box*. But it's possible to make it work.
+
+
+
+
+💥💥💥 *If youre here, you’re officially in the “Docker on Windows GUI Hell” zone.* Welcome, you tried to make it work.💥💥💥💥💥💥💥💥💥
+
+The error is most likely:
+```
+	_tkinter.TclError: couldn't connect to display ""
+```
+means: Docker’s trying to launch a GUI app (*tkinter*) but has **no access to your display server**—because `xhost` isn’t available in PowerShell or Windows natively.
+
+## 🧠 Fix Options:
+
+### 🅰️ **Install & Use X Server on Windows**
+You’ll need an **X Server for Windows** like:
+
+🔗 [VcXsrv (Recommended)](https://sourceforge.net/projects/vcxsrv/)  
+or  
+🔗 [Xming](https://sourceforge.net/projects/xming/)
+
+#### Steps:
+1. **Install VcXsrv**
+2. Run it with default settings (`Multiple windows`, `Start no client`, etc.)
+3. Set the `DISPLAY` environment variable in PowerShell **before running Docker**:
+```powershell
+$env:DISPLAY="host.docker.internal:0"
+```
+4. Then run the container:
+```powershell
+docker run -e DISPLAY=host.docker.internal:0 -v /tmp/.X11-unix:/tmp/.X11-unix --rm super-power-options
+```
+
+---
+
+### 🅱️ **Alternative: Don’t Use Docker for GUI**
+If it’s too messy (it often is), just run the app *directly* in your Python venv. You’ve already got:
+
+```bash
+python main.py
+```
+
+That’ll launch the same app with full GUI, sound, and no container headaches as long as its built correctly.
+Use Docker like a tool, only when the job demands it. Always aim to 🔪"trim the fat" of any progam you write.
+
+#### Steps:
+
+---
+
+### 🔮 Pro Option (Linux VM or WSL2)
+If you want to go full steam:
+- Use WSL2 with Ubuntu
+- Install Docker *inside* WSL
+- Run GUI apps via VcXsrv + X11 forwarding
+
+---
+
+### TL;DR:
+✅ You (probably) built it right.  
+🚫 Docker Desktop can’t do GUI without an X Server.  
+💡 Install VcXsrv and set `$env:DISPLAY="host.docker.internal:0"` to fix it.
+
+
+
+# 🧪 Python Virtual Environment Setup (venv) – Bash Terminal Guide
+
+This Markdown guide walks you through installing and using Python's `venv` module in a Bash environment (Linux, macOS, WSL). 
+Suitable for developers who prefer isolation, clarity, no un-needed docker headaches, and not 🗑trashing their global Python install.
+
+---
+
+## 📦 Requirements
+
+- Bash shell
+- Python 3.3+
+- `python3-venv` package (Linux)
+- `pip3` (optional but helpful)
+
+---
+
+## 🔧 Step-by-Step Instructions
+
+### 1. ✅ If following along, you should have Python installed already. If you're like me, hate reading documentation, and skipped things, go ahead and verify Python is Installed
+
+```bash
+	python3 --version
+```
+
+If missing:
+
+#### Ubuntu/Debian/WSL
+```bash
+	sudo apt update
+	sudo apt install python3 -y
+```
+
+#### macOS (Homebrew)
+```bash
+	brew install python
+```
+
+---
+
+### 2. 🔌 Install `venv` Module (if needed)
+
+```bash
+	sudo apt install python3-venv -y
+```
+
+Verify:
+
+```bash
+	python3 -m venv --help
+```
+
+---
+
+### 3. 🏗️ Create a Virtual Environment
+
+```bash
+	mkdir ~/myproject
+	cd ~/myproject
+	python3 -m venv venv
+```
+
+---
+
+### 4. 🟢 Activate the Virtual Environment
+
+```bash
+	source venv/bin/activate
+```
+
+Prompt changes to:
+
+```bash
+	(venv) user@machine:~/myproject$
+```
+
+---
+
+### 5. 📦 Install Python Packages
+
+```bash
+	pip install requests
+	pip list
+```
+
+---
+
+### 6. 🛑 Deactivate When Finished
+
+```bash
+	deactivate
+```
+
+---
+
+### 7. 🧽 Remove or Reset Environment
+
+```bash
+	rm -rf venv
+	# or reset
+	rm -rf venv && python3 -m venv venv
+```
+
+---
+
+## 🧠 Pro Tips
+
+| Action | Command |
+|--------|---------|
+| Use hidden venv dir | `python3 -m venv .venv` |
+| Switch Python versions | Look into `pyenv` or `asdf` |
+| Check Python path | `which python3` |
+
+---
+
+## 📜 TL;DR Quick Commands
+
+```bash
+	sudo apt install python3 python3-venv python3-pip -y
+	mkdir ~/myproject && cd ~/myproject
+	python3 -m venv venv
+	source venv/bin/activate
+	pip install <package>
+	deactivate
+```
+
+---
+
+Happy isolating. 🐍

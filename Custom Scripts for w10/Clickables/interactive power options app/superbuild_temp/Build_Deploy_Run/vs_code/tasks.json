@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build.deploy.run",
+      "type": "shell",
+      "command": "${workspaceFolder}\\Build_Deploy_Run\\build_and_deploy_venv_locked.bat",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

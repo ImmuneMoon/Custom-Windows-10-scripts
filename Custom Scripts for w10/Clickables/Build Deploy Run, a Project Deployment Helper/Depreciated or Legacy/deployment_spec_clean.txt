@@ -1,0 +1,71 @@
+
+🧠 Deployment Logic Specification (for Automation Parsing)
+
+🎯 Developer Objective
+Create a standalone `.exe` that:
+- Installs deployment scaffolding into the target project.
+- Configures and isolates environment logic cleanly.
+- Enables GUI-to-CLI bridge for final deployment actions.
+
+---
+
+🔧 INSTALLATION STAGE (Executed by `.exe` Installer)
+
+1. Scaffold Project
+- Install a `Build_Deploy_Run` folder inside the project directory.
+- Populate it with necessary deployment scripts and logic.
+
+2. Environment Creation (Scoped)
+- Within `Build_Deploy_Run`, create a Python virtual environment using only the `requirements.txt` file located *inside that folder*.
+- Do not touch or read from the user's global/system environment.
+
+3. Settings Storage
+- All settings and environment configurations are stored exclusively inside `Build_Deploy_Run`.
+- No parent or project root pollution.
+
+4. Pre-checks in Project Root
+- Check for existing:
+  - Virtual environment
+  - `dist/exe/` folder
+  - Docker artifacts (assume `PROJECT/Docker...`)
+- If they exist, ignore — they’ll be overwritten during deployment.
+
+5. Safety Checks
+- Look for existing project root-level virtual environments.
+- If found: prompt user for deletion.
+  - If user agrees: delete.
+  - If user declines: skip deletion.
+
+6. Fresh Env for Runtime Deployment
+- Regardless of previous step, ensure a new virtual environment is created in the project root.
+- This environment will be used during CLI invocation to build `.exe` and Docker containers.
+
+7. Optional Post-Install Actions
+- If configured, open:
+  - XWindows
+  - Docker UI
+  - Project folder in file explorer
+
+---
+
+🖥️ USER GUI EXIT + CLI HANDOFF
+
+Upon successful installation:
+- GUI generates a CLI command (e.g., `.\Build_Deploy_Run\build_and_deploy_venv_locked.bat`)
+- That command is:
+  - Shown to the user
+  - Copied to their clipboard
+- After confirmation, GUI exits.
+
+---
+
+🚀 CLI EXECUTION STAGE (Triggered by User CLI Command)
+
+Actions:
+- Launch the deployer-dedicated virtual environment.
+- Generate `.exe` and Docker images for the project.
+- Regenerate `requirements.txt` if existing one is outdated/inaccurate.
+- After completion, shut down the environment cleanly.
+
+Re-runs:
+- If executed again, the env is reactivated, the process repeats, and it exits on completion.

@@ -1,0 +1,18 @@
+
+def create_shortcut_to_exe():
+    exe_name = "Build Deploy Run.exe"
+    exe_path = Path(__file__).parent / "dist" / exe_name  # Adjust if your .exe is in a different path
+    shortcut_path = Path(project_entry.get()) / exe_name  # Drop it directly in the project dir
+
+    if not exe_path.exists():
+        print(f"[!] EXE not found at {exe_path}")
+        return
+
+    shell = win32com.client.Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortCut(str(shortcut_path.with_suffix('.lnk')))
+    shortcut.Targetpath = str(exe_path)
+    shortcut.WorkingDirectory = str(exe_path.parent)
+    shortcut.IconLocation = str(exe_path)  # optional, uses the EXE icon
+    shortcut.save()
+
+    print(f"[✓] Shortcut created at {shortcut_path.with_suffix('.lnk')}")

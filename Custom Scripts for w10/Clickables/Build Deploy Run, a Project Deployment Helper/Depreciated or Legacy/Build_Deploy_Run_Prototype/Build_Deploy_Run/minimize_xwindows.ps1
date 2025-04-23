@@ -1,0 +1,1 @@
+# PowerShell GUI minimizer
