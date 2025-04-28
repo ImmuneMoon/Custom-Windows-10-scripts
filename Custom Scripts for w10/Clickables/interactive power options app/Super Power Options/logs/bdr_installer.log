@@ -1,0 +1,7 @@
+[2025-04-28 00:15:33,664] WARNING - Entrypoint path 'E:\Files\GitHub Repos\Custom-Windows-10-scripts\Custom Scripts for w10\Clickables\interactive power options app\Super Power Options\"main.py"' does not seem to exist or is not a file. Build might fail.
+[2025-04-28 00:15:33,664] INFO - === Deploy Fusion Runner Starting ===
+[2025-04-28 00:15:33,664] INFO - Project Root: E:\Files\GitHub Repos\Custom-Windows-10-scripts\Custom Scripts for w10\Clickables\interactive power options app\Super Power Options
+[2025-04-28 00:15:33,664] INFO - Entrypoint (relative): "main.py"
+[2025-04-28 00:15:33,664] INFO - Entrypoint (full): E:\Files\GitHub Repos\Custom-Windows-10-scripts\Custom Scripts for w10\Clickables\interactive power options app\Super Power Options\"main.py"
+[2025-04-28 00:15:33,665] INFO - Docker Build: ENABLED
+[2025-04-28 00:15:33,665] ERROR - [ERROR] Entrypoint is not a valid file: E:\Files\GitHub Repos\Custom-Windows-10-scripts\Custom Scripts for w10\Clickables\interactive power options app\Super Power Options\"main.py"

@@ -1,4 +1,5 @@
 @echo off
+:: ./workers/smoke_test.bat
 setlocal enabledelayedexpansion
 
 echo.

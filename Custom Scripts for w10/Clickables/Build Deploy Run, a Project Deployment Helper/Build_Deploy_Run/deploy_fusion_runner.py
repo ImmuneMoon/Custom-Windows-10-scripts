@@ -1,94 +1,139 @@
-import os
-import shutil
-import subprocess
+# ./deploy_fusion_runner.py
+import argparse, sys
 from pathlib import Path
+from workers.run_command import run_command
+from workers.logger_setup import setup_logger
 
-def run_command(cmd, env=None):
-    subprocess.run(cmd, shell=True, check=True, env=env)
+logger = setup_logger("bdr_installer", "logs/bdr_installer.log")
 
-def venv_exists(path):
-    return (Path(path) / "Scripts" / "activate").exists()
 
-def create_venv(path):
-    print(f"[+] Creating venv at {path}")
-    run_command(f'python -m venv "{path}"')
+# --- Constants ---
+# CORRECTED: Go up 1 level from the script location (Build_Deploy_Run) to get the project root
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DIST_DIR = PROJECT_ROOT / "dist" # dist dir inside the project root
+# Define Dockerfile path relative to the *correct* project root
+DOCKERFILE = PROJECT_ROOT / "Dockerfile"
+# DEFAULT_ENTRYPOINT = None # No longer needed here as it comes from args/env
 
-def install_requirements(req_path, venv_path):
-    pip = Path(venv_path) / "Scripts" / "pip.exe"
-    run_command(f'"{pip}" install -r "{req_path}"')
 
-def prompt_user(question):
-    print(question + " [y/N]: ", end="")
-    return input().strip().lower() == "y"
+# --- EXE Builder ---
+def build_exe(entrypoint_full_path: Path):
+    """Builds a single-file executable using PyInstaller."""
+    if not entrypoint_full_path.is_file(): # Check is_file() specifically
+        logger.error(f"[ERROR] Entrypoint is not a valid file: {entrypoint_full_path}")
+        sys.exit(1)
 
-def delete_venv(path):
-    print(f"[!] Deleting existing venv at {path}...")
-    shutil.rmtree(path)
+    logger.info(f"[BUILD] Building EXE from: {entrypoint_full_path}")
+    # Ensure DIST_DIR exists
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    run_command([
+        sys.executable, "-m", "PyInstaller",
+        "--noconfirm", # Overwrite previous builds without asking
+        "--clean", # Clean PyInstaller cache and remove temporary files before building
+        "--onefile",
+        "--distpath", str(DIST_DIR),
+        str(entrypoint_full_path) # Use the full path here for PyInstaller
+    ])
+    logger.info("[DONE] EXE build complete.")
 
-def generate_clean_requirements(project_dir, output_path):
-    print("[*] Generating clean requirements.txt from user project...")
-    ignore_paths = ["Build_Deploy_Run", "venv"]
-    temp_req = Path(project_dir) / "temp_reqs.txt"
-    run_command(f'pip freeze > "{temp_req}"')
+# --- Docker Builder ---
+def build_docker(image_tag: str, entrypoint_script_relative: str):
+    """
+    Builds Docker image, generating a default Dockerfile if none exists.
+    Requires entrypoint_script_relative to be relative to PROJECT_ROOT.
+    """
+    if not DOCKERFILE.is_file(): # Check is_file specifically
+        logger.warning(f"Dockerfile not found at {DOCKERFILE}. Generating a default one.")
+        # <<< START Dockerfile Generation >>>
+        try:
+            # Basic Dockerfile content - uses python:3.11-slim as a reasonable default
+            # Assumes requirements.txt exists in PROJECT_ROOT
+            # Uses the relative path of the entrypoint script passed in
+            default_docker_content = f"""
+# Auto-Generated Basic Python Dockerfile
+FROM python:3.11-slim
 
-    with open(temp_req, "r") as src, open(output_path, "w") as dst:
-        for line in src:
-            if not any(ig in line.lower() for ig in ignore_paths):
-                dst.write(line)
-    temp_req.unlink()
+# Set working directory
+WORKDIR /app
 
-def generate_exe(project_dir):
-    print("[*] Building EXE...")
-    run_command(f'pyinstaller "{project_dir}/Super_Power_Options.spec"')
+# Copy requirements first to leverage Docker cache (if requirements.txt exists)
+COPY requirements.txt .
+# Use short-circuiting: install only if file exists, otherwise skip RUN
+RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; else echo "requirements.txt not found, skipping pip install."; fi
 
-def build_docker_image(project_dir, tag="super_power_options"):
-    print("[*] Building Docker image...")
-    run_command(f'docker build -t {tag} "{project_dir}"')
+# Copy the rest of the application code from the project root
+COPY . .
 
+# Command to run the application using the provided entrypoint
+CMD ["python", "{entrypoint_script_relative}"]
+"""
+            DOCKERFILE.write_text(default_docker_content.strip() + "\n", encoding='utf-8')
+            logger.info(f"Generated default Dockerfile at: {DOCKERFILE}")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to generate default Dockerfile: {e}", exc_info=True)
+            logger.warning("Skipping Docker build due to Dockerfile generation failure.")
+            return # Don't proceed if we couldn't create the file
+        # <<< END Dockerfile Generation >>>
+
+    # Proceed with the build command if Dockerfile exists
+    logger.info(f"[BUILD] Building Docker image: {image_tag}")
+    # Pass PROJECT_ROOT as the build context directory (".")
+    # Check=False because docker build might return non-zero for warnings
+    # We should check the result object instead if stricter control is needed
+    run_command(["docker", "build", "-t", image_tag, "."], cwd=PROJECT_ROOT, check=False)
+    # Could add check here: e.g., run 'docker images -q {image_tag}' to verify creation
+    logger.info("[DONE] Docker build attempt finished.")
+
+
+# --- Main Entry ---
 def main():
-    base = Path.cwd()
-    bdr_dir = base / "Build_Deploy_Run"
-    proj_dir = base
+    parser = argparse.ArgumentParser(description="Build & Deploy Automation Tool")
+    # Help text clarification
+    parser.add_argument("--entrypoint", type=str,
+                        help="Path to main script (relative to project root, e.g., 'src/main.py' or 'main.py')",
+                        default=None)
+    parser.add_argument("--skip-docker", action="store_true", help="Skip Docker image build")
 
-    # Step 1: Ensure Build_Deploy_Run is in place
-    if not bdr_dir.exists():
-        print("[X] Build_Deploy_Run folder not found.")
-        return
+    args = parser.parse_args()
 
-    # Step 2: Setup BDR venv
-    bdr_venv = bdr_dir / "venv"
-    if not venv_exists(bdr_venv):
-        create_venv(bdr_venv)
-        install_requirements(bdr_dir / "requirements.txt", bdr_venv)
+    # --- Determine entrypoint ---
+    entrypoint_arg_value = args.entrypoint
+    # Add logic to potentially read from config file if args.entrypoint is None
+    # For now, rely only on args
 
-    # Step 3: EXE / Docker pre-check
-    exe_path = proj_dir / "dist"
-    docker_image_name = "super_power_options"
-    if exe_path.exists():
-        print("[i] Existing EXE found — will be overwritten.")
-    if shutil.which("docker"):
-        print("[i] Docker available — continuing.")
+    if not entrypoint_arg_value:
+        # If still no entrypoint, exit
+        logger.error("[FATAL] No entrypoint provided via --entrypoint argument.")
+        sys.exit(1)
 
-    # Step 4: Handle project venv
-    proj_venv = proj_dir / "venv"
-    if venv_exists(proj_venv):
-        if prompt_user("Replace existing project venv?"):
-            delete_venv(proj_venv)
-        else:
-            print("Aborted by user.")
-            return
+    # Assume entrypoint_arg_value is relative to PROJECT_ROOT
+    # Construct full path for PyInstaller build
+    entrypoint_full_path = PROJECT_ROOT / entrypoint_arg_value
+    # Use the (potentially relative) path string for Dockerfile generation
+    entrypoint_relative_path_str = entrypoint_arg_value
 
-    # Step 5: Create clean project venv
-    create_venv(proj_venv)
-    req_out = proj_dir / "requirements.txt"
-    generate_clean_requirements(proj_dir, req_out)
-    install_requirements(req_out, proj_venv)
+    # Basic validation if path exists relative to project root
+    if not entrypoint_full_path.is_file():
+        logger.warning(f"Entrypoint path '{entrypoint_full_path}' does not seem to exist or is not a file. Build might fail.")
+        # Continue anyway, PyInstaller/Docker build will fail explicitly
 
-    # Step 6: Build EXE and Docker
-    generate_exe(proj_dir)
-    build_docker_image(proj_dir)
+    # Generate image tag from project directory name
+    image_tag = PROJECT_ROOT.name.lower().replace(" ", "_").replace("-", "_")
 
-    print("[✓] Deploy complete. All systems go.")
+    # --- Log Startup Info ---
+    logger.info("=== Deploy Fusion Runner Starting ===")
+    logger.info(f"Project Root: {PROJECT_ROOT}")
+    logger.info(f"Entrypoint (relative): {entrypoint_relative_path_str}")
+    logger.info(f"Entrypoint (full): {entrypoint_full_path}")
+    logger.info(f"Docker Build: {'SKIPPED' if args.skip_docker else 'ENABLED'}")
+
+    # --- Build Steps ---
+    build_exe(entrypoint_full_path)
+
+    if not args.skip_docker:
+        build_docker(image_tag, entrypoint_relative_path_str) # Pass relative path
+
+    logger.info("=== Deployment Complete ===")
 
 if __name__ == "__main__":
     main()

@@ -1,139 +1,148 @@
+# workers/ docker_helpers.py
+
+import os
 import subprocess
-import time
-import sys
+import logging
 from pathlib import Path
-try:
-    from colorama import Fore, Style, init
-    init(autoreset=True)
-except ImportError:
-    class Dummy:
-        def __getattr__(self, attr): return ''
-    Fore = Style = Dummy()
-    def init(*args, **kwargs): pass
 
+logger = logging.getLogger(__name__)
 
+def get_docker_path():
+    """
+    Gets the path to the Docker executable.
 
-def ensure_docker_running():
-    print(Fore.YELLOW + "[*] Checking Docker availability...")
-    try:
-        result = subprocess.run(["docker", "info"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            print(Fore.GREEN + "[✓] Docker is running.")
-            return
-    except Exception:
-        pass
+    Returns:
+        Path: The path to the Docker executable, or None if not found.
+    """
+    # Check for environment variable
+    docker_path = os.environ.get("DOCKER_PATH")
+    if docker_path:
+        docker_path = Path(docker_path)
+        if docker_path.exists():
+            return docker_path
+        else:
+            logger.warning("DOCKER_PATH environment variable is set, but the path is invalid.")
 
-    print(Fore.YELLOW + "[!] Docker not responding. Attempting to launch Docker Desktop...")
-
-    # Attempt to start Docker Desktop
-    try:
-        subprocess.run(["start", "docker"], shell=True)
-    except Exception as e:
-        print(Fore.RED + f"[X] Failed to launch Docker: {e}")
-        sys.exit(1)
-
-    for i in range(12):
-        time.sleep(5)
-        result = subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if result.returncode == 0:
-            print(Fore.GREEN + f"[✓] Docker became responsive after {(i+1)*5}s.")
-            return
-
-    print(Fore.RED + "[X] Docker did not become responsive in time. Exiting.")
-    sys.exit(1)
-
-
-def ensure_context_is_default():
-    print(Fore.YELLOW + "[*] Setting Docker context to 'default'...")
-    result = subprocess.run(["docker", "context", "use", "default"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if result.returncode != 0:
-        print(Fore.RED + "[X] Failed to set Docker context to 'default'.")
-        sys.exit(1)
-    print(Fore.GREEN + "[✓] Docker context set to 'default'.")
-
-
-def build_dockerfile_if_missing(project_root: Path, entrypoint="main.py"):
-    dockerfile = project_root / "Dockerfile"
-    if dockerfile.exists():
-        print(Fore.GREEN + "[✓] Dockerfile already exists.")
-        return
-
-    print(Fore.YELLOW + "[*] Dockerfile not found. Creating default Dockerfile...")
-    dockerfile.write_text(f"""\
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY . /app/
-RUN rm -rf /app/Build_Deploy_Run
-RUN pip install --no-cache-dir -r requirements-docker.txt
-
-CMD ["python", "{entrypoint}"]
-""")
-    print(Fore.GREEN + "[✓] Dockerfile created.")
-
-
-def patch_dockerfile(project_root: Path, entrypoint: str):
-    dockerfile = project_root / "Dockerfile"
-    if not dockerfile.exists():
-        return
-
-    with open(dockerfile, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    line_to_inject = "RUN rm -rf /app/Build_Deploy_Run"
-    if line_to_inject in content:
-        print(Fore.GREEN + "[✓] Dockerfile already excludes Build_Deploy_Run.")
-        return
-
-    lines = content.splitlines()
-    for i, line in enumerate(lines):
-        if "COPY" in line.upper():
-            lines.insert(i + 1, line_to_inject)
-            break
-    else:
-        lines.append(line_to_inject)
-
-    dockerfile.write_text("\n".join(lines))
-    print(Fore.GREEN + "[✓] Dockerfile patched to exclude Build_Deploy_Run.")
-
-
-def ensure_dockerignore(project_root: Path):
-    dockerignore = project_root / ".dockerignore"
-    if dockerignore.exists():
-        print(Fore.GREEN + "[✓] .dockerignore already exists.")
-        return
-
-    dockerignore.write_text(
-        "Build_Deploy_Run/\n"
-        "__pycache__/\n"
-        "*.pyc\n"
-        "*.spec\n"
-        "*.bat\n"
-        "*.ps1\n"
-        "venv/\n"
-    )
-    print(Fore.GREEN + "[+] .dockerignore created.")
-
-
-def build_docker_image(project_root: Path, image_name: str):
-    print(Fore.YELLOW + f"[*] Building Docker image '{image_name}'...")
-    subprocess.run(["docker", "build", "-t", image_name, "."], cwd=project_root, check=True)
-    print(Fore.GREEN + f"[✓] Docker image '{image_name}' built.")
-
-
-def run_docker_container(image_name: str, display="host.docker.internal:0"):
-    print(Fore.YELLOW + f"[*] Running Docker container '{image_name}' with GUI support...")
-
-    docker_cmd = [
-        "docker", "run", "--rm",
-        "-e", f"DISPLAY={display}",
-        "-e", "DISABLE_TRAY=1",
-        image_name
+    # Default locations (consider adding more)
+    default_paths = [
+        Path("C:/Program Files/Docker/Docker/resources/bin/docker.exe"),  # Windows
+        Path("/usr/local/bin/docker"),  # macOS/Linux
+        Path("/usr/bin/docker"),
     ]
+    for path in default_paths:
+        if path.exists():
+            return path
+    return None
 
+
+
+def check_docker_installed():
+    """
+    Checks if Docker is installed and available in the system's PATH.
+    Returns:
+        bool: True if Docker is installed, False otherwise.
+    """
+    docker_path = get_docker_path()
+    if docker_path:
+        return True
+    else:
+        return False
+
+
+def build_docker_image(project_dir, tag="super_power_options"):
+    """
+    Builds the Docker image.
+
+    Args:
+        project_dir (str): The path to the project directory.
+        tag (str, optional): The tag for the Docker image. Defaults to "super_power_options".
+    """
+    if not check_docker_installed():
+        logger.error("Docker is not installed or not in PATH.")
+        raise RuntimeError("Docker is not installed or not in PATH.")
+
+    logger.info(f"Building Docker image with tag: {tag}")
     try:
-        subprocess.run(docker_cmd, check=True)
-        print(Fore.GREEN + "[✓] Docker container executed.")
+        subprocess.run(["docker", "build", "-t", tag, project_dir], check=True)
+        logger.info("Docker image built successfully.")
     except subprocess.CalledProcessError as e:
-        print(Fore.RED + f"[X] Docker failed to run: {e}")
-        sys.exit(1)
+        logger.error(f"Error building Docker image: {e}")
+        raise  # Re-raise the exception to be handled by the caller
+
+def run_docker_container(tag="super_power_options", port=8000):
+    """
+    Runs the Docker container.
+
+    Args:
+        tag (str, optional): The tag of the Docker image to run. Defaults to "super_power_options".
+        port (int, optional): The port to expose. Defaults to 8000.
+    """
+    if not check_docker_installed():
+        logger.error("Docker is not installed or not in PATH.")
+        raise RuntimeError("Docker is not installed or not in PATH.")
+    logger.info(f"Running Docker container from image: {tag}, exposing port: {port}")
+    try:
+        subprocess.run(["docker", "run", "-p", f"{port}:{port}", tag], check=True)
+        logger.info("Docker container running.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running Docker container: {e}")
+        raise
+
+def stop_docker_container(tag="super_power_options"):
+    """
+    Stops the Docker container.
+
+    Args:
+        tag (str, optional):The tag of the docker image to stop
+    """
+    if not check_docker_installed():
+        logger.error("Docker is not installed or not in PATH.")
+        raise RuntimeError("Docker is not installed or not in PATH.")
+    logger.info(f"Stopping Docker container with image name: {tag}")
+    try:
+        # Get the container ID first
+        container_id_process = subprocess.run(["docker", "ps", "-q", "-f", f"ancestor={tag}"],
+                                             check=True, capture_output=True, text=True)
+        container_id = container_id_process.stdout.strip()
+
+        if container_id:
+            subprocess.run(["docker", "stop", container_id], check=True)
+            logger.info("Docker container stopped")
+        else:
+            logger.warning(f"No running container found for image: {tag}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error stopping Docker container: {e}")
+        raise
+        
+def remove_docker_image(tag="super_power_options"):
+    """
+    Removes the docker image
+
+    Args:
+        tag (str): The tag of the image to remove
+    """
+    if not check_docker_installed():
+        logger.error("Docker is not installed or not in PATH.")
+        raise RuntimeError("Docker is not installed or not in PATH.")
+    logger.info(f"Removing docker image: {tag}")
+    try:
+        subprocess.run(["docker", "image", "remove", tag], check=True)
+        logger.info("Docker image removed")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error removing docker image: {e}")
+        raise
+
+if __name__ == "__main__":
+    # Example usage
+    project_dir = "."  # Replace with your actual project directory
+    tag_name = "my_app_image"
+    try:
+        build_docker_image(project_dir, tag_name)
+        run_docker_container(tag_name)
+        # Add a delay
+        import time
+        time.sleep(10)
+        stop_docker_container(tag_name)
+        remove_docker_image(tag_name)
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")

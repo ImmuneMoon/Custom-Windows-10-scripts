@@ -1,3 +1,4 @@
+# install_config/install_workers/minimize_window.py
 import ctypes, time
 
 def minimize_window_by_title(window_title, timeout=5):
