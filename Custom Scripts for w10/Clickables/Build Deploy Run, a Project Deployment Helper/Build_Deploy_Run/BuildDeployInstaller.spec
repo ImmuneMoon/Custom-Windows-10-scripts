@@ -10,7 +10,7 @@ block_cipher = None
 
 
 datas=[('assets', 'assets')],
-
+ 
 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):

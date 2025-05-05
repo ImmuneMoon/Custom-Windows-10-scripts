@@ -9,14 +9,16 @@ from PIL import Image, ImageTk
 from install_config.install_workers.GUI import widgets
 from install_config.install_workers.GUI import callbacks
 from install_config.install_workers import installer_steps
+from install_config.install_workers.GUI.gui_setup import load_header_icon
+
 
 try:
     from workers import docker_helpers
     DOCKER_HELPERS_LOADED = True
-except ImportError as e:
-    print(f"ERROR: Cannot import docker_helpers: {e}")
-    messagebox.showerror("Import Error", "Could not load docker_helpers module.", icon='error')
+except ImportError:
     DOCKER_HELPERS_LOADED = False
+    docker_helpers = None  # fallback so later code doesn't die
+
 
 BDR_FOLDER_NAME = "BUILD_DEPLOY_RUN_APP"
 PROJECT_ROOT = Path.cwd()
@@ -59,6 +61,8 @@ class InstallerApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.BDR_FOLDER_NAME = BDR_FOLDER_NAME
 
+        load_header_icon(self)
+
         try:
             icon_path = Path.cwd() / "assets" / "icon.ico"
             if icon_path.is_file():
@@ -86,16 +90,18 @@ class InstallerApp:
         self.force_replace_cli_venv = tk.BooleanVar(value=False)
 
         self.docker_path_var.set(get_default_docker_path())
+
+        if not DOCKER_HELPERS_LOADED:
+            self.docker_path_var.set("")  # clear it, don't trust the helper
+            self.log_message("⚠️ Docker helpers unavailable. Docker integration disabled.", level=logging.WARNING)
+
+            # If your GUI has a docker entry field, disable it to avoid user confusion
+            if hasattr(self, 'docker_entry') and self.docker_entry:
+                self.docker_entry.config(state=tk.DISABLED)
+
         self.xwindows_path_var.set(get_default_xwindows_path())
 
         self.png_icon = None
-        try:
-            png_path = Path.cwd() / "assets" / "icon.png"
-            if png_path.is_file():
-                img = Image.open(png_path)
-                self.png_icon = ImageTk.PhotoImage(img)
-        except Exception as e:
-            logger.error(f"Failed to load PNG icon: {e}", exc_info=True)
 
         class CallbacksWrapper:
             def __init__(self, app_ref): self.app = app_ref

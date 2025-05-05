@@ -23,7 +23,8 @@ def prepare_and_run_installation(
     xwindows_path: Optional[str] = None,
     log_queue: Optional[queue.Queue] = None,
     stop_event: Optional[threading.Event] = None,
-    skip_docker: bool = False
+    skip_docker: bool = False,
+    app_instance: Optional[Any] = None
 ) -> bool:
 
     """
@@ -67,9 +68,7 @@ def prepare_and_run_installation(
     # Prepare configuration dictionary for start_installation
     config = {
         "installer_steps": steps,
-        # Other config items if needed by start_installation itself
-        # "bdr_source_dir": str(source_dir),
-        # "target_project_dir": str(user_project_dir)
+        "app_instance": app_instance
     }
 
     try:
