@@ -1,5 +1,5 @@
 # install_config/install_workers/installer_steps.py
-import logging, queue, threading, traceback, os 
+import logging, queue, threading, traceback, os, subprocess, time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -196,6 +196,110 @@ def start_installation(config: Dict[str, Any], log_queue: queue.Queue, stop_even
         return False
 
 
+# --- Function to run the batch script ---
+def run_build_deploy_batch_script(
+    bdr_target_dir: Path,
+    entrypoint: str,
+    skip_docker: bool,
+    docker_path: Optional[str] = None, # Add docker_path
+    xwindows_path: Optional[str] = None, # Add xwindows_path
+    open_project: bool = False, # Add open_project
+    log_queue: Optional[queue.Queue] = None,
+    stop_event: Optional[threading.Event] = None
+):
+    """Runs the build_and_deploy_venv_locked.bat script with the specified entrypoint and deployment options."""
+    logger.info("Running build and deploy batch script...")
+
+    batch_script_path = bdr_target_dir / "build_and_deploy_venv_locked.bat"
+
+    if not batch_script_path.is_file():
+        error_msg = f"Error: Batch script not found at: {batch_script_path}"
+        logger.error(error_msg)
+        if log_queue:
+            log_queue.put((logging.ERROR, error_msg))
+        raise FileNotFoundError(error_msg)
+
+    # Construct the command to run the batch script
+    command = [
+        str(batch_script_path),  # Path to the batch script
+        str(Path(bdr_target_dir).parent / entrypoint) # The full path to the entrypoint relative to project root
+    ]
+
+    if skip_docker:
+        command.append("--skip-docker")
+
+    # Add docker_path, xwindows_path, and open_project as arguments
+    # Assuming deploy_fusion_runner.py expects them like this
+    if docker_path:
+        command.extend(["--docker-path", docker_path])
+    if xwindows_path:
+        command.extend(["--xwindows-path", xwindows_path])
+    if open_project:
+        command.append("--open-project") # Assuming --open-project is a flag with no value
+
+    logger.info(f"Executing batch script command: {' '.join(command)}")
+    if log_queue:
+        log_queue.put((logging.INFO, f"Running: {' '.join(command)}"))
+
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=str(Path(bdr_target_dir).parent),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            shell=True
+        )
+
+        while process.poll() is None:
+            if stop_event and stop_event.is_set():
+                logger.warning("Stop event set, terminating batch process.")
+                process.terminate()
+                raise InterruptedError("Installation cancelled by user.")
+
+            stdout_line = process.stdout.readline()
+            if stdout_line:
+                if log_queue:
+                    log_queue.put((logging.INFO, stdout_line.strip()))
+            stderr_line = process.stderr.readline()
+            if stderr_line:
+                if log_queue:
+                    log_queue.put((logging.ERROR, stderr_line.strip()))
+            time.sleep(0.05)
+
+        stdout_remainder, stderr_remainder = process.communicate()
+        if stdout_remainder:
+             if log_queue:
+                log_queue.put((logging.INFO, stdout_remainder.strip()))
+        if stderr_remainder:
+             if log_queue:
+                log_queue.put((logging.ERROR, stderr_remainder.strip()))
+
+        return_code = process.returncode
+        if return_code != 0:
+            error_msg = f"Batch script failed with return code: {return_code}"
+            logger.error(error_msg)
+            if log_queue:
+                log_queue.put((logging.ERROR, error_msg))
+            raise RuntimeError(error_msg)
+        else:
+            logger.info("Batch script executed successfully.")
+
+    except FileNotFoundError:
+        pass
+    except InterruptedError:
+        if log_queue:
+            log_queue.put((logging.WARNING, "Build and Deploy cancelled."))
+        raise
+    except Exception as e:
+        error_msg = f"Error running batch script: {e}"
+        logger.error(error_msg, exc_info=True)
+        if log_queue:
+            log_queue.put((logging.ERROR, error_msg))
+        raise
+
+
+
 # --- Build Steps Function ---
 def build_steps(
     source_dir: Path,
@@ -243,7 +347,7 @@ def build_steps(
             "name": "Install Requirements into BDR Venv",
             "func": install_requirements,
             "args": [bdr_env_path, bdr_requirements_path],
-            "kwargs": {"strict": True},  # <<< ADD THIS
+            "kwargs": {"strict": True},
             "test": lambda: bdr_python_exe.is_file() and bdr_requirements_path.is_file()
         },
         {
@@ -255,24 +359,22 @@ def build_steps(
             "test": lambda: user_venv_python_exe.is_file() # Test if user venv python exists
         },
         {
-            "name": "Generate Deploy Config",
-            "func": generate_deploy_config,
-            "args": [bdr_target_dir],
-            "kwargs": {
-                "entrypoint": entrypoint,
-                "skip_docker": skip_docker,
-                "docker_path": docker_path or "", # Pass empty string if None
-                "xwindows_path": xwindows_path or "", # Pass empty string if None
-                "open_project": open_project # <<< PASS IT HERE
-            },
-            "test": lambda: (bdr_target_dir / ".deploy_config").exists()
-        },
-        {
             "name": "Generate Deployment Batch Script",
-            "func": generate_batch_script, # From install_utils.py
+            "func": generate_batch_script, # From install_utils.py - make sure this generates the updated batch script
             "args": [bdr_target_dir],
             "kwargs": {},
             "test": lambda: (bdr_target_dir / "build_and_deploy_venv_locked.bat").exists()
+        },
+        {
+            "name": "Run Build and Deploy Batch Script",
+            "func": run_build_deploy_batch_script, # New function to add
+            "args": [bdr_target_dir, entrypoint, skip_docker], # Pass BDR dir, entrypoint, and skip_docker flag
+            "kwargs": {
+                "docker_path": docker_path,  # Pass docker_path
+                "xwindows_path": xwindows_path, # Pass xwindows_path
+                "open_project": open_project   # Pass open_project
+            },
+            "test": lambda: True # Or add a test if possible (e.g., check for build artifacts)
         }
     ]
     logger.debug(f"Built {len(steps)} steps.")

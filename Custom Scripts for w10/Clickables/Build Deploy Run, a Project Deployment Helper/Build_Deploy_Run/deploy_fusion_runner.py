@@ -1,4 +1,5 @@
 # ./deploy_fusion_runner.py
+
 import argparse, sys
 from pathlib import Path
 from workers.run_command import run_command
@@ -96,6 +97,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Add arguments for docker_path, xwindows_path, and open_project
+    parser.add_argument("--docker-path", type=str, default=None,
+                        help="Optional: Path to the Docker executable.")
+    parser.add_argument("--xwindows-path", type=str, default=None,
+                        help="Optional: Path related to X Windows (specific use case needed).")
+    parser.add_argument("--open-project", action="store_true",
+                        help="Optional: Open the project after successful deployment.")
+
     # --- Determine entrypoint ---
     entrypoint_arg_value = args.entrypoint
     # Add logic to potentially read from config file if args.entrypoint is None
@@ -126,6 +135,9 @@ def main():
     logger.info(f"Entrypoint (relative): {entrypoint_relative_path_str}")
     logger.info(f"Entrypoint (full): {entrypoint_full_path}")
     logger.info(f"Docker Build: {'SKIPPED' if args.skip_docker else 'ENABLED'}")
+    logger.info(f"Docker Path: {args.docker_path}")
+    logger.info(f"X Windows Path: {args.xwindows_path}")
+    logger.info(f"Open Project: {args.open_project}")
 
     # --- Build Steps ---
     build_exe(entrypoint_full_path)

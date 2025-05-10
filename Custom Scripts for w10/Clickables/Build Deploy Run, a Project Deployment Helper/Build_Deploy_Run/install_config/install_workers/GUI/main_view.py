@@ -3,7 +3,7 @@
 
 import tkinter as tk
 from tkinter import messagebox, filedialog
-import logging, threading, queue, sys
+import logging, threading, queue, sys, subprocess
 from pathlib import Path
 # Keep pyperclip fallback if used
 try:

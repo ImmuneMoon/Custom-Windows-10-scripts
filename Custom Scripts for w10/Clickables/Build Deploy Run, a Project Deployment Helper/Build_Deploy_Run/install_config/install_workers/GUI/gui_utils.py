@@ -3,7 +3,7 @@
 import subprocess, queue, logging, json, os, sys
 from pathlib import Path
 import tkinter as tk
-from tkinter import PhotoImage
+from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
 
@@ -11,29 +11,30 @@ def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller frozen .exe """
     try:
         base_path = sys._MEIPASS  # PyInstaller sets this when frozen
+        logger.debug(f"Using _MEIPASS as base_path: {base_path}")
     except AttributeError:
         base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        logger.debug(f"Using current directory as base_path: {base_path}")
+    resource_path = os.path.join(base_path, relative_path)
+    logger.debug(f"Resolved resource path for '{relative_path}': {resource_path}")
+    return resource_path
 
-def get_icon_image(image_filename="assets/icon.png"):
+
+def get_icon_image(relative_path: str, size=(64, 64)):
     """
     Safely load a Tkinter-compatible image (e.g., PNG).
+    - Uses get_resource_path to handle PyInstaller bundling.
     - If file is missing, logs a warning and returns None.
-    - Works both inside PyInstaller and during dev mode.
     """
     try:
-        image_path = get_resource_path(image_filename)
-        if os.path.exists(image_path):
-            img = PhotoImage(file=image_path)
-            logger.debug(f"Icon image loaded from {image_path}")
-            return img
-        else:
-            logger.warning(f"Icon image file not found at: {image_path}")
-            return None
+        # Use get_resource_path to get the absolute path to the bundled resource
+        absolute_path = get_resource_path(relative_path)
+        img = Image.open(absolute_path)
+        resized = img.resize(size, Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(resized)
     except Exception as e:
-        logger.error(f"Failed to load icon image: {e}")
+        logging.getLogger(__name__).warning(f"Failed to load icon from {relative_path}: {e}")
         return None
-
 
 
 def log_to_queue(queue_obj, message, level=logging.INFO):

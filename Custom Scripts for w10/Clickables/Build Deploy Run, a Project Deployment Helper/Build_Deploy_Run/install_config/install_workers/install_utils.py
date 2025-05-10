@@ -144,13 +144,17 @@ def copy_bdr_scripts(src_bdr_root: Path, target_bdr_dir: Path, confirm_overwrite
 
     logger.debug(f"copy_bdr_scripts(): copying from '{src_bdr_root}' to '{target_bdr_dir}' (Overwrite: {confirm_overwrite})")
 
-    src_bdr_root = get_frozen_bdr_path()
-    logger.debug(f"[DEBUG] Runtime BDR Source Path: {src_bdr_root}")
-    
+    # src_bdr_root is the 'dist' directory in this case.
+    # Get the project root directory (parent of the 'dist' directory).
+    project_root = src_bdr_root.parent
+    logger.debug(f"[DEBUG] Project Root for copying files: {project_root}")
+
+
     target_bdr_dir = Path(target_bdr_dir)
 
-    if not src_bdr_root.is_dir():
-        raise FileNotFoundError(f"[BDR] Source directory does not exist: {src_bdr_root}")
+    if not project_root.is_dir(): # Check if the project root exists
+        raise FileNotFoundError(f"[BDR] Project root directory does not exist: {project_root}")
+
 
     if target_bdr_dir.exists():
         if confirm_overwrite:
@@ -164,10 +168,10 @@ def copy_bdr_scripts(src_bdr_root: Path, target_bdr_dir: Path, confirm_overwrite
     except Exception as e:
         raise RuntimeError(f"[BDR] Failed to create target directory: {target_bdr_dir}. Reason: {e}") from e
 
-    # Directories to copy
+    # Directories to copy (still from project_root)
     dirs_to_copy = ["workers"]
     for dirname in dirs_to_copy:
-        src_dir = src_bdr_root / dirname
+        src_dir = project_root / dirname # Look for workers in project_root
         dst_dir = target_bdr_dir / dirname
 
         if src_dir.is_dir():
@@ -183,12 +187,12 @@ def copy_bdr_scripts(src_bdr_root: Path, target_bdr_dir: Path, confirm_overwrite
             except Exception as e:
                 raise RuntimeError(f"[BDR] Failed to copy directory '{dirname}': {e}") from e
         else:
-            logger.warning(f"[BDR] Directory '{dirname}' not found. Skipping.")
+            logger.warning(f"[BDR] Directory '{dirname}' not found in project root. Skipping.") # Updated warning
 
-    # Files to copy
+    # Files to copy (from project_root)
     required_files = ["deploy_fusion_runner.py", "requirements.txt"]
     for filename in required_files:
-        src_file = src_bdr_root / filename
+        src_file = project_root / filename # Look for files in project_root
         dst_file = target_bdr_dir / filename
 
         if not src_file.is_file():
@@ -201,6 +205,7 @@ def copy_bdr_scripts(src_bdr_root: Path, target_bdr_dir: Path, confirm_overwrite
             raise RuntimeError(f"[BDR] Failed to copy file '{filename}': {e}") from e
 
     logger.info(f"[BDR] All required content successfully copied to: {target_bdr_dir}")
+
 
 
 # --- Batch Script Generation (Using Temp File for pip freeze) ---

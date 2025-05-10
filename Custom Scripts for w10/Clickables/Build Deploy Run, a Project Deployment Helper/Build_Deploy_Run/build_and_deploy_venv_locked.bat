@@ -1,3 +1,4 @@
+batch
 @echo off
 
 :: ./build_and_deploy_venv_locked.bat
@@ -10,7 +11,6 @@ REM --- Paths ---
 SET VENV_DIR=%~dp0.venv
 SET PYTHON_EXE=%VENV_DIR%\Scripts\python.exe
 SET PROJECT_DIR=%~dp0..
-SET CONFIG_FILE=%~dp0.deploy_config
 
 REM --- Banner ---
 echo -------------------------------------------------
@@ -39,20 +39,31 @@ where python
 REM --- Activate Environment ---
 call "%VENV_DIR%\Scripts\activate.bat"
 
-REM --- Load Config if Exists ---
-SET ENTRYPOINT_ARG=
+REM --- Determine Entrypoint from Command Line ---
+SET ENTRYPOINT_TO_USE=
 SET SKIP_DOCKER_ARG=
 
-IF EXIST "%CONFIG_FILE%" (
-    FOR /F "tokens=1,2 delims==" %%A IN (%CONFIG_FILE%) DO (
-        IF /I "%%A"=="entrypoint" SET ENTRYPOINT_ARG=--entrypoint %%B
-        IF /I "%%A"=="skip_docker" IF /I "%%B"=="true" SET SKIP_DOCKER_ARG=--skip-docker
-    )
+REM Check if the first argument (entrypoint) is provided
+IF "%~1"=="" (
+    echo [FATAL] Error: No entrypoint script path provided.
+    echo Usage: %~nx0 ^<entrypoint_script_path^> [optional_args]
+    echo Example: %~nx0 src\main.py
+    pause
+    exit /b 1
+) ELSE (
+    SET ENTRYPOINT_TO_USE=%~1
 )
 
-REM --- Confirm Python being used ---
-echo [DEBUG] Running sys.executable check:
-"%PYTHON_EXE%" -c "import sys; print('[DEBUG] sys.executable:', sys.executable)"
+REM Process other optional arguments if needed (e.g., --skip-docker)
+REM This part would need to be expanded if you have more optional args
+IF /I "%~2"=="--skip-docker" (
+    SET SKIP_DOCKER_ARG=--skip-docker
+)
+
+
+REM --- Set ENTRYPOINT_ARG for deploy_fusion_runner.py ---
+REM Enclose in quotes to handle paths with spaces
+SET ENTRYPOINT_ARG=--entrypoint "%ENTRYPOINT_TO_USE%"
 
 REM --- Run Deployment ---
 echo [INFO] Launching deployment...

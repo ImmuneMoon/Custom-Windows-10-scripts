@@ -1,30 +1,27 @@
-# ./ BuildDeployInstaller.spec
+# BuildDeployInstaller.spec
 
 import sys
 import os
-
-
 from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
-
-
-datas=[('assets', 'assets')],
- 
 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# Dynamically collect all files inside 'assets' folder
-assets_datas = collect_data_files('assets', includes=["*.ico", "*.png"], excludes=[])
-
 a = Analysis(
     ['install_config/install_workers/GUI/main.py'],
     pathex=['.'],
     binaries=[],
-    datas=datas,
+    datas=[
+        ('assets/icon.ico', 'assets'),
+        ('assets/icon.png', 'assets'),
+        ('deploy_fusion_runner.py', '.'),
+        ('requirements.txt', '.'),
+
+    ],
     hiddenimports=[
         'plyer',
         'plyer.platforms.win.notification',
